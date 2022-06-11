@@ -1,6 +1,6 @@
 import { getNsDataThroughFile, getFilePath } from './helpers.js'
 
-let spawnDelay = 50; // Delay to allow time for `installBackdoor` to start running before a background script connects back to 'home'
+const spawnDelay = 50; // Delay to allow time for `installBackdoor` to start running before a background script connects back to 'home'
 
 /** @param {NS} ns 
  * Scan all servers, backdoor anything that can be backdoored, and leave a file to indicate it's been done
@@ -24,7 +24,7 @@ export let main = async ns => {
         ns.print(`${hackableServers.filter(s => myHackingLevel > ns.getServerRequiredHackingLevel(s)).length} servers are within our hack level (${myHackingLevel}).`);
         ns.print(`${hackableServers.filter(s => myHackingLevel > ns.getServerRequiredHackingLevel(s) && ns.hasRootAccess(s)).length} rooted servers are within our hack level (${myHackingLevel})`);
 
-        let toBackdoor = await getNsDataThroughFile(ns, `${JSON.stringify(hackableServers)}.filter(s => !ns.getServer(s).backdoorInstalled)`, '/Temp/servers-to-backdoor.txt');
+        let toBackdoor = await getNsDataThroughFile(ns, `ns.args.filter(s => !ns.getServer(s).backdoorInstalled)`, '/Temp/servers-to-backdoor.txt', hackableServers);
         let count = toBackdoor.length;
         ns.print(`${count} servers have yet to be backdoored.`);
         if (count == 0) return;
