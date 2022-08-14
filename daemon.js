@@ -276,12 +276,7 @@ export async function main(ns) {
     periodicScripts = [
         // Buy tor as soon as we can if we haven't already, and all the port crackers (exception: don't buy 2 most expensive port crackers until later if in a no-hack BN)
         { interval: 25000, name: "/Tasks/tor-manager.js", shouldRun: () => 4 in dictSourceFiles && !allHostNames.includes("darkweb") },
-        {
-            interval: 26000, name: "/Tasks/program-manager.js",
-            shouldRun: () => 4 in dictSourceFiles && getNumPortCrackers(ns) != 5 &&
-                // In BNs without hack income, we will buy the first 3 (cheap) port crackers, and delay the others until we have a lot of money or TRP
-                (getNumPortCrackers(ns) < 3 || shouldImproveHacking() || allHostNames.includes("w0r1d_d43m0n"))
-        },
+        { interval: 26000, name: "/Tasks/program-manager.js", shouldRun: () => 4 in dictSourceFiles && getNumPortCrackers(ns) != 5 },
         { interval: 27000, name: "/Tasks/contractor.js", requiredServer: "home" }, // Periodically look for coding contracts that need solving
         // Buy every hacknet upgrade with up to 4h payoff if it is less than 10% of our current money or 8h if it is less than 1% of our current money.
         { interval: 28000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "4h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.1] },
@@ -355,14 +350,14 @@ async function kickstartHackXp(ns) {
                 log(ns, `INFO: Studying for ${studyTime} seconds to kickstart hack XP and speed up initial cycle times. (set --initial-study-time 0 to disable this step.)`);
                 const money = ns.getServerMoneyAvailable("home")
                 if (money >= 200000) // If we can afford to travel, we're probably far enough along that it's worthwhile going to Volhaven where ZB university is.
-                    await getNsDataThroughFile(ns, `ns.travelToCity("Volhaven")`, '/Temp/travel-to-city.txt');
+                    await getNsDataThroughFile(ns, `ns.singularity.travelToCity("Volhaven")`, '/Temp/travel-to-city.txt');
                 const playerInfo = await getPlayerInfo(); // Update player stats to be certain of our new location.
                 const university = playerInfo.city == "Sector-12" ? "Rothman University" : playerInfo.city == "Aevum" ? "Summit University" : playerInfo.city == "Volhaven" ? "ZB Institute of Technology" : null;
                 if (!university)
                     log(ns, `INFO: Cannot study, because you are in city ${playerInfo.city} which has no known university, and you cannot afford to travel to another city.`);
                 else {
                     const course = playerInfo.city == "Sector-12" ? "Study Computer Science" : "Algorithms"; // Assume if we are still in Sector-12 we are poor and should only take the free course
-                    await getNsDataThroughFile(ns, `ns.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, false]);
+                    await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, false]);
                     startedStudying = true;
                     await ns.sleep(studyTime * 1000); // Wait for studies to affect Hack XP. This will often greatly reduce time-to-hack/grow/weaken, and avoid a slow first cycle
                 }
@@ -393,7 +388,7 @@ async function kickstartHackXp(ns) {
         log(ns, 'WARNING: Encountered an error while trying to kickstart hack XP (low RAM issues perhaps?)', false, 'warning');
     } finally {
         // Ensure we stop studying (in case no other running scripts end up stealing focus, so we don't keep studying forever)
-        if (startedStudying) await getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt');
+        if (startedStudying) await getNsDataThroughFile(ns, `ns.singularity.stopAction()`, '/Temp/stop-action.txt');
         studying = false; // This will allow work-for-faction to launch
     }
 }
@@ -493,7 +488,10 @@ let dictScriptsRun = {}; // Keep a cache of every script run on every host, and 
  * Workaround a current bitburner bug by yeilding briefly to the game after executing something. **/
 async function exec(ns, script, host, numThreads, ...args) {
     // Try to run the script with auto-retry if it fails to start
-    // TODO: It probably doesn't make sense to auto-retry H/G/W attempts, only attempt to run other scripts
+    // It doesn't make sense to auto-retry hack tools, only add error handling to other scripts
+    if (hackTools.some(h => h.name === script))
+        return ns.exec(script, host, numThreads, ...args);
+    // Otherwise, run with auto-retry to handle e.g. temporary ram issues
     const pid = await autoRetry(ns, async () => {
         const p = ns.exec(script, host, numThreads, ...args)
         return p;
@@ -753,7 +751,8 @@ async function doTargetingLoop(ns) {
             const expectedDeletedHostPhrase = "Invalid hostname: ";
             let expectedErrorPhraseIndex = errorMessage.indexOf(expectedDeletedHostPhrase);
             if (expectedErrorPhraseIndex == -1) {
-                log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${err?.stack || errorMessage}`, true, 'warning');
+                if (err?.stack) errorMessage += '\n' + err.stack;
+                log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${errorMessage}`, true, 'warning');
                 continue;
             }
             let start = expectedErrorPhraseIndex + expectedDeletedHostPhrase.length;
@@ -798,7 +797,7 @@ async function refreshDynamicServerData(ns, serverNames) {
     dictServerProfitInfo = Object.fromEntries(JSON.parse(dictServerProfitInfo).map(s => [s.hostname, s]));
     //ns.print(dictServerProfitInfo);
     if (options.i)
-        currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.getCurrentServer()', '/Temp/terminal-server.txt'));
+        currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.singularity.getCurrentServer()', '/Temp/terminal-server.txt'));
 }
 
 class Server {
